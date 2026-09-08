@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}Sign Up — The Roll{% endblock %}
+
+{% block content %}
+<div class="form-block">
+    <h1>Create Your Account</h1>
+    <p class="helptext" style="margin-bottom: 18px;">Your wallet starts at ₹0 — add funds later to book a consultation.</p>
+    <form method="post">
+        {% csrf_token %}
+        {% for field in form %}
+            <div class="form-row">
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}<span class="helptext">{{ field.help_text }}</span>{% endif %}
+                {% if field.errors %}<ul class="errorlist">{{ field.errors }}</ul>{% endif %}
+            </div>
+        {% endfor %}
+        <button type="submit" class="btn btn-primary" style="width: 100%; padding: 12px;">Create Account</button>
+    </form>
+</div>
+{% endblock %}

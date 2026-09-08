@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}List Yourself — The Roll{% endblock %}
+
+{% block content %}
+<div class="form-block" style="max-width: 720px;">
+    <h1>Open Your File on the Roll</h1>
+    <p class="helptext" style="margin-bottom: 18px;">Set your own consultation rate — clients see it upfront before they select you.</p>
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        {% for field in form %}
+            <div class="form-row">
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}<span class="helptext">{{ field.help_text }}</span>{% endif %}
+                {% if field.errors %}<ul class="errorlist">{{ field.errors }}</ul>{% endif %}
+            </div>
+        {% endfor %}
+        <button type="submit" class="btn btn-primary" style="width: 100%; padding: 12px;">List Myself</button>
+    </form>
+</div>
+{% endblock %}

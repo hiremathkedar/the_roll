@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% block title %}{{ lawyer.user.get_full_name|default:lawyer.user.username }} — The Roll{% endblock %}
+
+{% block content %}
+<div class="docket-no" style="margin-bottom: 14px;">FILE NO. {{ lawyer.id|stringformat:"05d" }}-2026</div>
+
+<div class="profile-header">
+    {% if lawyer.photo %}
+        <img src="{{ lawyer.photo.url }}" alt="" style="width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 2px solid var(--brass);">
+    {% else %}
+        <div class="seal-badge">{% if lawyer.is_verified %}✓{% else %}{{ lawyer.years_experience }}y{% endif %}</div>
+    {% endif %}
+    <div style="flex: 1;">
+        <h1>{{ lawyer.user.get_full_name|default:lawyer.user.username }}</h1>
+        <div class="meta-row">
+            <span>@{{ lawyer.user.username }}</span>
+            <span>📍 {{ lawyer.city }}</span>
+            <span>⚖️ Bar No. {{ lawyer.bar_number }}</span>
+            <span>{{ lawyer.years_experience }} years experience</span>
+            {% if lawyer.average_rating %}
+                <span style="color: var(--brass); font-weight: 600;">★ {{ lawyer.average_rating }} ({{ lawyer.rating_count }})</span>
+            {% endif %}
+            {% if lawyer.is_verified %}<span style="color: var(--success); font-weight: 600;">Verified</span>{% endif %}
+        </div>
+        <div class="tags">
+            {% for area in lawyer.practice_area_list %}
+                <span class="tag">{{ area }}</span>
+            {% endfor %}
+        </div>
+    </div>
+    <div style="text-align: right;">
+        <div class="rate" style="font-size: 1.3rem;">₹{{ lawyer.consultation_rate }}</div>
+        <div style="color: var(--slate); font-size: 0.8rem; margin-bottom: 14px;">per consultation</div>
+        {% if user.is_authenticated %}
+            {% if user.client_profile %}
+                <a href="{% url 'confirm_selection' lawyer.id %}" class="btn btn-primary">Select This Counsel</a>
+                <div style="font-size: 0.72rem; color: var(--slate-light); margin-top: 6px;">Wallet: ₹{{ user.client_profile.wallet_balance }}</div>
+            {% else %}
+                <span class="helptext">Only client accounts can select counsel.</span>
+            {% endif %}
+        {% else %}
+            <a href="{% url 'login' %}?next={{ request.path }}" class="btn btn-primary">Log In to Select</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="section-block">
+    <h2>About</h2>
+    <p>{{ lawyer.bio|default:"No bio provided yet." }}</p>
+</div>
+
+{% if same_city %}
+<div class="section-block" style="border-left: 3px solid var(--brass);">
+    <h2 style="border: none; margin-bottom: 6px;">📍 In-Person Available</h2>
+    <p style="margin: 0; color: var(--slate);">This advocate is based in your city — if offered, you'll be able to choose an office visit alongside call or text when booking.</p>
+</div>
+{% endif %}
+
+<div class="section-block">
+    <h2>Reviews {% if lawyer.average_rating %}— ★ {{ lawyer.average_rating }} average ({{ lawyer.rating_count }} review{{ lawyer.rating_count|pluralize }}){% endif %}</h2>
+
+    {% if user.is_authenticated %}
+        <form method="post" style="margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px dashed var(--line);">
+            {% csrf_token %}
+            {% for field in review_form %}
+                <div class="form-row">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.errors %}<ul class="errorlist">{{ field.errors }}</ul>{% endif %}
+                </div>
+            {% endfor %}
+            <button type="submit" class="btn btn-primary">Post Review</button>
+        </form>
+    {% else %}
+        <p class="helptext" style="margin-bottom: 20px;"><a href="{% url 'login' %}?next={{ request.path }}" style="color: var(--seal); font-weight: 600;">Log in</a> to leave a review.</p>
+    {% endif %}
+
+    {% for review in lawyer_reviews %}
+        <div class="review-card">
+            <div class="review-meta">
+                <a href="{% url 'public_profile' review.author.username %}" style="color: inherit; font-weight: 600;">{{ review.author.get_full_name|default:review.author.username }} (@{{ review.author.username }})</a> — {{ review.created_at|date:"d M Y" }}
+                &nbsp;·&nbsp;
+                {% for i in "12345" %}{% if forloop.counter <= review.rating %}★{% else %}☆{% endif %}{% endfor %}
+            </div>
+            <p style="margin: 0;">{{ review.text }}</p>
+        </div>
+    {% empty %}
+        <p style="color: var(--slate);">No reviews yet — be the first.</p>
+    {% endfor %}
+</div>
+
+<div class="section-block">
+    <h2>Experiences Posted by {{ lawyer.user.get_full_name|default:lawyer.user.username }}</h2>
+    {% for exp in lawyer_experiences %}
+        <a href="{% url 'experience_detail' exp.id %}" class="review-card" style="display: block; margin-bottom: 14px;">
+            <div class="review-meta">{{ exp.created_at|date:"d M Y" }}</div>
+            <h3 style="font-family: var(--font-display); margin: 0 0 6px; color: var(--ink); font-size: 1.05rem;">{{ exp.title }}</h3>
+            <p style="margin: 0; color: var(--slate);">{{ exp.body|truncatewords:25 }}</p>
+        </a>
+    {% empty %}
+        <p style="color: var(--slate);">No experiences posted yet.</p>
+    {% endfor %}
+</div>
+{% endblock %}

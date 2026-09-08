@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}My Profile — The Roll{% endblock %}
+{% block content %}
+<div class="profile-header">
+    {% if client.photo %}
+        <img src="{{ client.photo.url }}" alt="" style="width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 2px solid var(--brass);">
+    {% else %}
+        <div class="seal-badge">{{ client.user.first_name|first|upper }}{{ client.user.last_name|first|upper }}</div>
+    {% endif %}
+    <div style="flex: 1;">
+        <h1>{{ client.user.get_full_name|default:client.user.username }}</h1>
+        <div class="meta-row">
+            <span>@{{ client.user.username }}</span>
+            <span>Member ID: {{ client.id|stringformat:"05d" }}</span>
+            <span>📍 {{ client.city }}</span>
+            <span>Member since {{ client.created_at|date:"M Y" }}</span>
+        </div>
+    </div>
+    <div style="text-align: right;">
+        <div class="rate" style="font-size: 1.3rem;">₹{{ client.wallet_balance }}</div>
+        <div style="color: var(--slate); font-size: 0.8rem;">wallet balance</div>
+        <form method="post" action="{% url 'add_funds' %}" style="margin-top: 10px; display: flex; gap: 6px; justify-content: flex-end;">
+            {% csrf_token %}
+            <input type="number" name="amount" min="1" step="1" placeholder="Amount" style="width: 100px; padding: 8px; border: 1px solid var(--line); border-radius: 3px;">
+            <button type="submit" class="btn btn-brass" style="padding: 8px 14px; font-size: 0.8rem;">Add Funds</button>
+        </form>
+    </div>
+</div>
+
+<div class="form-block">
+    <h1 style="font-size: 1.2rem;">Edit Profile</h1>
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        {% for field in form %}
+            <div class="form-row">
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.errors %}<ul class="errorlist">{{ field.errors }}</ul>{% endif %}
+            </div>
+        {% endfor %}
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+    </form>
+</div>
+
+<div class="section-block">
+    <h2>Experiences You've Posted</h2>
+    {% for exp in own_experiences %}
+        <a href="{% url 'experience_detail' exp.id %}" class="review-card" style="display: block; margin-bottom: 14px;">
+            <div class="review-meta">{{ exp.created_at|date:"d M Y" }} &nbsp;·&nbsp; ♡ {{ exp.like_count }} &nbsp;·&nbsp; 💬 {{ exp.comment_count }}</div>
+            <h3 style="font-family: var(--font-display); margin: 0 0 6px; color: var(--ink); font-size: 1.1rem;">{{ exp.title }}</h3>
+            <p style="margin: 0; color: var(--slate);">{{ exp.body|truncatewords:25 }}</p>
+        </a>
+    {% empty %}
+        <p style="color: var(--slate);">You haven't posted any experiences yet. <a href="{% url 'create_experience' %}" style="color: var(--seal); font-weight: 600;">Share one</a>.</p>
+    {% endfor %}
+</div>
+{% endblock %}

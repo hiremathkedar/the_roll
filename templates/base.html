@@ -1,0 +1,110 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}The Roll{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body>
+
+    <header class="site-header">
+        <div class="container">
+            <a href="{% url 'browse' %}" class="brand">The <span>Roll</span></a>
+            <nav class="nav-links">
+                <a href="{% url 'browse' %}">Browse Counsel</a>
+                <a href="{% url 'experiences_list' %}">Experiences</a>
+                {% if user.is_authenticated %}
+                    {% if user.lawyer_profile %}
+                        <a href="{% url 'lawyer_dashboard' %}">My Dashboard</a>
+                    {% elif user.client_profile %}
+                        <a href="{% url 'my_bookings' %}">My Bookings</a>
+                        <a href="{% url 'client_profile' %}">My Profile</a>
+                    {% endif %}
+                    <form method="post" action="{% url 'logout' %}" style="display: inline; margin: 0;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline" style="cursor: pointer; font-family: inherit;">Log Out</button>
+                    </form>
+                {% else %}
+                    <a href="{% url 'login' %}">Log In</a>
+                    <a href="{% url 'client_signup' %}">Sign Up</a>
+                    <a href="{% url 'list_yourself' %}" class="btn btn-brass">List Yourself</a>
+                {% endif %}
+            </nav>
+        </div>
+    </header>
+
+    <div class="docket-strip">
+        <div class="container">
+            IN THE MATTER OF LEGAL COUNSEL &nbsp;&middot;&nbsp; ROLL OF ADVOCATES &nbsp;&middot;&nbsp; EST. 2026
+        </div>
+    </div>
+
+    <main class="container" style="padding-top: 32px;">
+        {% if messages %}
+            <ul class="messages">
+                {% for message in messages %}
+                    <li class="{{ message.tags }}">{{ message }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="site-footer">
+        <div class="container footer-grid">
+            <div class="footer-brand">
+                <div class="brand">The <span>Roll</span></div>
+                <p>A structured way to find, vet, and retain legal counsel — verified listings, escrow-backed bookings, and transparent pricing from the first consultation.</p>
+                <div class="footer-address">
+                    <p>📍 4th Floor, Advocate Chambers, MG Road, Pune, Maharashtra 411001, India</p>
+                    <p>✉ hello@theroll.in</p>
+                    <p>☎ +91 98765 43210</p>
+                </div>
+                <div class="social-row">
+                    <a href="#" class="social-icon" aria-label="LinkedIn">in</a>
+                    <a href="#" class="social-icon" aria-label="Twitter / X">𝕏</a>
+                    <a href="#" class="social-icon" aria-label="Instagram">IG</a>
+                    <a href="#" class="social-icon" aria-label="YouTube">▶</a>
+                </div>
+            </div>
+            <div class="footer-col">
+                <h4>Platform</h4>
+                <a href="{% url 'browse' %}">Browse Counsel</a>
+                <a href="{% url 'experiences_list' %}">Experiences</a>
+                <a href="{% url 'list_yourself' %}">List Yourself</a>
+                <a href="{% url 'client_signup' %}">Sign Up</a>
+            </div>
+            <div class="footer-col">
+                <h4>Company</h4>
+                <a href="#">About Us</a>
+                <a href="#">Careers</a>
+                <a href="#">Press</a>
+                <a href="#">Contact</a>
+            </div>
+            <div class="footer-col">
+                <h4>Legal</h4>
+                <a href="#">Terms of Service</a>
+                <a href="#">Privacy Policy</a>
+                <a href="#">Advertising Notice</a>
+                <a href="#">Cookie Policy</a>
+            </div>
+        </div>
+        <div class="container footer-bottom">
+            <span>© 2026 The Roll. All rights reserved.</span>
+            <span>Every listing is issued a docket number for accountability.</span>
+        </div>
+    </footer>
+    <script>
+        // Prevent accidental scroll-wheel changes on number inputs (e.g. consultation rate, years experience)
+        document.addEventListener('wheel', function (e) {
+            if (document.activeElement && document.activeElement.type === 'number') {
+                document.activeElement.blur();
+            }
+        }, { passive: true });
+    </script>
+
+</body>
+</html>

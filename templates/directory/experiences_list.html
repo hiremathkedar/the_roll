@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block title %}Experiences — The Roll{% endblock %}
+
+{% block content %}
+<section class="hero" style="padding-top: 20px;">
+    <h1>Shared Experiences</h1>
+    <p>Real accounts, posted under your username — legal run-ins, how people handled them, what happened next. Not tied to any lawyer listing.</p>
+    <div class="hero-actions">
+        {% if user.is_authenticated %}
+            <a href="{% url 'create_experience' %}" class="btn btn-primary">Share an Experience</a>
+        {% else %}
+            <a href="{% url 'login' %}?next={% url 'create_experience' %}" class="btn btn-primary">Log In to Post</a>
+        {% endif %}
+    </div>
+</section>
+
+<form method="get" class="filter-bar">
+    <div class="field" style="flex: 1;">
+        <label for="q">Search</label>
+        <input type="text" name="q" id="q" placeholder="Search posts, usernames, or profile IDs..." value="{{ query }}" style="min-width: 260px;">
+    </div>
+    <div class="field">
+        <label for="sort">Sort By</label>
+        <select name="sort" id="sort">
+            <option value="newest" {% if sort == 'newest' %}selected{% endif %}>Newest</option>
+            <option value="liked" {% if sort == 'liked' %}selected{% endif %}>Most Liked</option>
+            <option value="commented" {% if sort == 'commented' %}selected{% endif %}>Most Discussed</option>
+        </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Search</button>
+</form>
+
+{% if experiences %}
+    {% for exp in experiences %}
+    <a href="{% url 'experience_detail' exp.id %}" class="review-card" style="display: block; margin-bottom: 14px;">
+        <div class="review-meta"><a href="{% url 'public_profile' exp.author.username %}" style="color: inherit; font-weight: 600;">{{ exp.author.get_full_name|default:exp.author.username }} (@{{ exp.author.username }})</a> — {{ exp.created_at|date:"d M Y" }}</div>
+        <h3 style="font-family: var(--font-display); margin: 0 0 6px; color: var(--ink); font-size: 1.15rem;">{{ exp.title }}</h3>
+        <p style="margin: 0 0 10px; color: var(--slate);">{{ exp.body|truncatewords:35 }}</p>
+        <div style="font-size: 0.8rem; color: var(--slate-light);">
+            ♡ {{ exp.num_likes }} like{{ exp.num_likes|pluralize }} &nbsp;·&nbsp; 💬 {{ exp.num_comments }} comment{{ exp.num_comments|pluralize }}
+        </div>
+    </a>
+    {% endfor %}
+{% else %}
+    <div class="empty-state"><p>No experiences match your search yet.</p></div>
+{% endif %}
+{% endblock %}

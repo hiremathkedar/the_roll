@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% block title %}My Dashboard — The Roll{% endblock %}
+
+{% block content %}
+<section style="margin-bottom: 24px;">
+    <h1 style="font-family: var(--font-display); font-size: 1.8rem; margin: 0 0 6px;">My Dashboard</h1>
+    <p style="color: var(--slate);">Wallet balance: <strong>₹{{ lawyer.wallet_balance }}</strong></p>
+</section>
+
+{% for booking in bookings %}
+<div class="section-block">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <div>
+            <strong>Booking #{{ booking.id }}</strong> — {{ booking.client.user.get_full_name|default:booking.client.user.username }} (@{{ booking.client.user.username }})
+        </div>
+        <span class="status-badge status-{{ booking.status }}">{{ booking.get_status_display }}</span>
+    </div>
+    <p style="color: var(--slate); font-size: 0.88rem; margin: 0 0 12px;">
+        Amount in escrow: ₹{{ booking.amount_paid }} &nbsp;·&nbsp; Requested {{ booking.created_at|date:"d M Y, H:i" }}
+    </p>
+
+    {% if booking.status == 'pending' %}
+        <p class="helptext" style="margin-bottom: 12px;">Respond by {{ booking.response_deadline|date:"d M Y, H:i" }} — offer up to 3 time slots within the next week.</p>
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="booking_id" value="{{ booking.id }}">
+            {% for i in "123" %}
+            <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center;">
+                <input type="datetime-local" name="slot{{ i }}_datetime" style="padding: 8px; border: 1px solid var(--line); border-radius: 3px;">
+                <select name="slot{{ i }}_mode" style="padding: 8px; border: 1px solid var(--line); border-radius: 3px;">
+                    <option value="">Mode</option>
+                    <option value="call">Call</option>
+                    <option value="text">Text</option>
+                    <option value="in_person">In Person</option>
+                </select>
+            </div>
+            {% endfor %}
+            <button type="submit" class="btn btn-primary">Send Slots to Client</button>
+        </form>
+    {% elif booking.status == 'slots_offered' %}
+        <p class="helptext">Waiting on client to pick a slot from:</p>
+        <ul>
+            {% for slot in booking.time_slots.all %}
+            <li>{{ slot.proposed_datetime|date:"d M Y, H:i" }} — {{ slot.get_mode_display }}</li>
+            {% endfor %}
+        </ul>
+    {% elif booking.status == 'confirmed' %}
+        {% with slot=booking.time_slots.all|dictsortreversed:"is_selected"|first %}
+        <p><strong>Confirmed:</strong> {{ slot.proposed_datetime|date:"d M Y, H:i" }} — {{ slot.get_mode_display }}</p>
+        {% endwith %}
+    {% endif %}
+</div>
+{% empty %}
+<div class="empty-state"><p>No booking requests yet. Once a client selects you, it'll appear here.</p></div>
+{% endfor %}
+
+<div class="section-block">
+    <h2>Experiences You've Posted</h2>
+    {% for exp in own_experiences %}
+        <a href="{% url 'experience_detail' exp.id %}" class="review-card" style="display: block; margin-bottom: 14px;">
+            <div class="review-meta">{{ exp.created_at|date:"d M Y" }} &nbsp;·&nbsp; ♡ {{ exp.like_count }} &nbsp;·&nbsp; 💬 {{ exp.comment_count }}</div>
+            <h3 style="font-family: var(--font-display); margin: 0 0 6px; color: var(--ink); font-size: 1.1rem;">{{ exp.title }}</h3>
+            <p style="margin: 0; color: var(--slate);">{{ exp.body|truncatewords:25 }}</p>
+        </a>
+    {% empty %}
+        <p style="color: var(--slate);">You haven't posted any experiences yet. <a href="{% url 'create_experience' %}" style="color: var(--seal); font-weight: 600;">Share one</a>.</p>
+    {% endfor %}
+</div>
+{% endblock %}

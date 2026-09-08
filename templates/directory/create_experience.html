@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block title %}Share an Experience — The Roll{% endblock %}
+
+{% block content %}
+<div class="form-block">
+    <h1>Share an Experience</h1>
+    <p class="helptext" style="margin-bottom: 18px;">Posted under your username. Others will be able to comment and like it.</p>
+    <form method="post">
+        {% csrf_token %}
+        {% for field in form %}
+            <div class="form-row">
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.errors %}<ul class="errorlist">{{ field.errors }}</ul>{% endif %}
+            </div>
+        {% endfor %}
+        <button type="submit" class="btn btn-primary" style="width: 100%; padding: 12px;">Post Anonymously</button>
+    </form>
+</div>
+{% endblock %}

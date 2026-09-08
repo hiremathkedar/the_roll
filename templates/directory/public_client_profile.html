@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}{{ profile_user.get_full_name|default:profile_user.username }} — The Roll{% endblock %}
+
+{% block content %}
+<div class="profile-header">
+    {% if client.photo %}
+        <img src="{{ client.photo.url }}" alt="" style="width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 2px solid var(--brass);">
+    {% else %}
+        <div class="seal-badge">{{ profile_user.first_name|first|upper }}{{ profile_user.last_name|first|upper }}</div>
+    {% endif %}
+    <div style="flex: 1;">
+        <h1>{{ profile_user.get_full_name|default:profile_user.username }}</h1>
+        <div class="meta-row">
+            <span>@{{ profile_user.username }}</span>
+            <span>📍 {{ client.city }}</span>
+            <span>Member since {{ client.created_at|date:"M Y" }}</span>
+        </div>
+    </div>
+</div>
+
+<div class="section-block">
+    <h2>Experiences Posted</h2>
+    {% for exp in experiences %}
+        <a href="{% url 'experience_detail' exp.id %}" class="review-card" style="display: block; margin-bottom: 14px;">
+            <div class="review-meta">{{ exp.created_at|date:"d M Y" }}</div>
+            <h3 style="font-family: var(--font-display); margin: 0 0 6px; color: var(--ink); font-size: 1.1rem;">{{ exp.title }}</h3>
+            <p style="margin: 0; color: var(--slate);">{{ exp.body|truncatewords:25 }}</p>
+        </a>
+    {% empty %}
+        <p style="color: var(--slate);">No experiences posted yet.</p>
+    {% endfor %}
+</div>
+{% endblock %}

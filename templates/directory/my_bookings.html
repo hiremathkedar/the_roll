@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block title %}My Bookings — The Roll{% endblock %}
+
+{% block content %}
+<section style="margin-bottom: 24px;">
+    <h1 style="font-family: var(--font-display); font-size: 1.8rem; margin: 0 0 6px;">My Bookings</h1>
+    <p style="color: var(--slate);">Wallet balance: <strong>₹{{ client.wallet_balance }}</strong></p>
+</section>
+
+{% for booking in bookings %}
+<div class="section-block">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <div>
+            <strong>Booking #{{ booking.id }}</strong> — {{ booking.lawyer.user.get_full_name|default:booking.lawyer.user.username }} (@{{ booking.lawyer.user.username }})
+        </div>
+        <span class="status-badge status-{{ booking.status }}">{{ booking.get_status_display }}</span>
+    </div>
+    <p style="color: var(--slate); font-size: 0.88rem; margin: 0 0 12px;">
+        Amount: ₹{{ booking.amount_paid }} &nbsp;·&nbsp; Requested {{ booking.created_at|date:"d M Y, H:i" }}
+    </p>
+
+    {% if booking.status == 'pending' %}
+        <p class="helptext">Waiting for counsel to respond by {{ booking.response_deadline|date:"d M Y, H:i" }}. If they don't respond in time, you'll be refunded automatically.</p>
+
+    {% elif booking.status == 'slots_offered' %}
+        <p class="helptext" style="margin-bottom: 10px;">Choose a time:</p>
+        {% for slot in booking.time_slots.all %}
+        <form method="post" action="{% url 'confirm_slot' slot.id %}" style="display: inline-block; margin: 0 8px 8px 0;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline" style="border-color: var(--ink); color: var(--ink);">
+                {{ slot.proposed_datetime|date:"d M Y, H:i" }} — {{ slot.get_mode_display }}
+            </button>
+        </form>
+        {% endfor %}
+
+    {% elif booking.status == 'confirmed' %}
+        {% with slot=booking.time_slots.all|dictsortreversed:"is_selected"|first %}
+        <p><strong>Confirmed:</strong> {{ slot.proposed_datetime|date:"d M Y, H:i" }} — {{ slot.get_mode_display }}</p>
+        {% endwith %}
+        <form method="post" action="{% url 'complete_booking' booking.id %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-primary">Mark Consultation Complete</button>
+        </form>
+
+    {% elif booking.status == 'completed' %}
+        <p style="color: var(--success);">Payment released to counsel. Thanks for using The Roll.</p>
+
+    {% elif booking.status == 'expired' %}
+        <p style="color: var(--seal-dark);">Counsel didn't respond in time — you were refunded ₹{{ booking.amount_paid }}.</p>
+
+    {% elif booking.status == 'fined' %}
+        <p style="color: var(--seal-dark);">This counsel was fined for this booking. A bonus refund was credited to your wallet.</p>
+    {% endif %}
+</div>
+{% empty %}
+<div class="empty-state"><p>No bookings yet. <a href="{% url 'browse' %}" style="color: var(--seal); font-weight: 600;">Browse the roll</a> to select counsel.</p></div>
+{% endfor %}
+{% endblock %}

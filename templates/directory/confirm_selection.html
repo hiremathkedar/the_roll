@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block title %}Confirm Selection — The Roll{% endblock %}
+
+{% block content %}
+<div class="form-block">
+    <h1>Confirm Your Selection</h1>
+
+    <div class="section-block" style="margin-bottom: 20px;">
+        <h2 style="border: none; margin-bottom: 4px;">{{ lawyer.user.get_full_name|default:lawyer.user.username }}</h2>
+        <p style="color: var(--slate); margin: 0;">{{ lawyer.city }} &nbsp;·&nbsp; {{ lawyer.years_experience }} years experience</p>
+    </div>
+
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+        <tr>
+            <td style="padding: 8px 0; color: var(--slate);">Consultation fee</td>
+            <td style="padding: 8px 0; text-align: right; font-family: var(--font-mono); font-weight: 600;">₹{{ lawyer.consultation_rate }}</td>
+        </tr>
+        <tr style="border-top: 1px dashed var(--line);">
+            <td style="padding: 8px 0; color: var(--slate);">Your wallet balance</td>
+            <td style="padding: 8px 0; text-align: right; font-family: var(--font-mono);">₹{{ client.wallet_balance }}</td>
+        </tr>
+    </table>
+
+    {% if insufficient %}
+        <p style="color: var(--seal); font-weight: 600; margin-bottom: 16px;">Insufficient wallet balance to select this counsel.</p>
+        <a href="{% url 'lawyer_detail' lawyer.id %}" class="btn btn-outline" style="border-color: var(--ink); color: var(--ink);">Go Back</a>
+    {% else %}
+        <p class="helptext" style="margin-bottom: 20px;">
+            This amount will be held in escrow. {{ lawyer.user.get_full_name|default:lawyer.user.username }} will have 24 hours to offer available time slots.
+            You'll only be charged once you confirm below.
+        </p>
+        <form method="post" action="{% url 'select_lawyer' lawyer.id %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-primary" style="width: 100%; padding: 12px;">Confirm & Pay ₹{{ lawyer.consultation_rate }}</button>
+        </form>
+        <a href="{% url 'lawyer_detail' lawyer.id %}" style="display: block; text-align: center; margin-top: 12px; color: var(--slate); font-size: 0.85rem;">Cancel</a>
+    {% endif %}
+</div>
+{% endblock %}

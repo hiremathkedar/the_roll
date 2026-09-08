@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block title %}{{ experience.title }} — The Roll{% endblock %}
+
+{% block content %}
+<div class="section-block">
+    <div class="review-meta"><a href="{% url 'public_profile' experience.author.username %}" style="color: inherit; font-weight: 600;">{{ experience.author.get_full_name|default:experience.author.username }} (@{{ experience.author.username }})</a> — {{ experience.created_at|date:"d M Y, H:i" }}</div>
+    {% if user == experience.author %}
+        <form method="post" action="{% url 'delete_experience' experience.id %}" onsubmit="return confirm('Delete this experience? This cannot be undone.');" style="display: inline-block; margin-top: 8px;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline" style="border-color: var(--seal); color: var(--seal); font-size: 0.8rem; padding: 6px 14px;">Delete This Experience</button>
+        </form>
+    {% endif %}
+    <h1 style="font-family: var(--font-display); font-size: 1.6rem; margin: 8px 0 16px; border: none; padding: 0;">{{ experience.title }}</h1>
+    <p style="white-space: pre-wrap; line-height: 1.7;">{{ experience.body }}</p>
+
+    <div style="margin-top: 20px; padding-top: 16px; border-top: 1px dashed var(--line); display: flex; gap: 14px; align-items: center;">
+        {% if user.is_authenticated %}
+            <form method="post" action="{% url 'toggle_like' experience.id %}">
+                {% csrf_token %}
+                <button type="submit" class="btn {% if user_has_liked %}btn-primary{% else %}btn-outline{% endif %}" style="{% if not user_has_liked %}border-color: var(--ink); color: var(--ink);{% endif %}">
+                    {% if user_has_liked %}♥ Liked{% else %}♡ Like{% endif %} ({{ experience.like_count }})
+                </button>
+            </form>
+        {% else %}
+            <span class="helptext">♡ {{ experience.like_count }} likes — <a href="{% url 'login' %}?next={{ request.path }}" style="color: var(--seal); font-weight: 600;">log in</a> to like</span>
+        {% endif %}
+    </div>
+</div>
+
+<div class="section-block">
+    <h2>{{ comments|length }} Comment{{ comments|length|pluralize }}</h2>
+
+    {% if user.is_authenticated %}
+        <form method="post" style="margin-bottom: 22px;">
+            {% csrf_token %}
+            {{ form.text }}
+            <div style="margin-top: 8px;">
+                <button type="submit" class="btn btn-primary">Post Comment</button>
+            </div>
+        </form>
+    {% else %}
+        <p class="helptext" style="margin-bottom: 20px;"><a href="{% url 'login' %}?next={{ request.path }}" style="color: var(--seal); font-weight: 600;">Log in</a> to comment.</p>
+    {% endif %}
+
+    {% for comment in comments %}
+        <div class="review-card">
+            <div class="review-meta"><a href="{% url 'public_profile' comment.author.username %}" style="color: inherit; font-weight: 600;">{{ comment.author.get_full_name|default:comment.author.username }} (@{{ comment.author.username }})</a> — {{ comment.created_at|date:"d M Y, H:i" }}</div>
+            <p style="margin: 0;">{{ comment.text }}</p>
+        </div>
+    {% empty %}
+        <p style="color: var(--slate);">No comments yet.</p>
+    {% endfor %}
+</div>
+{% endblock %}

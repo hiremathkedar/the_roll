@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+{% block title %}Browse Counsel — The Roll{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <h1>Find counsel you can trust.</h1>
+    <p>Browse verified advocates by practice area and city. Every listing carries a docket number — no anonymous listings, no guesswork.</p>
+</section>
+
+<div class="chip-row">
+    <a href="{% url 'browse' %}" class="chip-link {% if not selected_practice_area %}chip-active{% endif %}">All</a>
+    {% for key, label in practice_areas %}
+        <a href="?practice_area={{ key }}" class="chip-link {% if selected_practice_area == key %}chip-active{% endif %}">{{ label }}</a>
+    {% endfor %}
+</div>
+
+<form method="get" class="filter-bar" id="directory">
+    <div class="field">
+        <label for="name">Name</label>
+        <input type="text" name="name" id="name" placeholder="Search by name" value="{{ selected_name }}">
+    </div>
+    <div class="field">
+        <label for="practice_area">Practice Area</label>
+        <select name="practice_area" id="practice_area">
+            <option value="">All Areas</option>
+            {% for key, label in practice_areas %}
+                <option value="{{ key }}" {% if selected_practice_area == key %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="field">
+        <label for="city">City</label>
+        <input type="text" name="city" id="city" placeholder="e.g. Pune" value="{{ selected_city }}">
+    </div>
+    <div class="field">
+        <label for="sort">Sort By</label>
+        <select name="sort" id="sort">
+            <option value="">Newest Listed</option>
+            <option value="rate_low" {% if selected_sort == 'rate_low' %}selected{% endif %}>Rate: Low to High</option>
+            <option value="rate_high" {% if selected_sort == 'rate_high' %}selected{% endif %}>Rate: High to Low</option>
+            <option value="experience" {% if selected_sort == 'experience' %}selected{% endif %}>Most Experienced</option>
+        </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Apply</button>
+</form>
+
+<p style="color: var(--slate); font-size: 0.85rem; margin-bottom: 20px;">
+    {{ lawyers|length }} of {{ total_count }} advocate{{ total_count|pluralize }} on the roll
+</p>
+
+{% if lawyers %}
+<div class="roll-grid">
+    {% for lawyer in lawyers %}
+    <a href="{% url 'lawyer_detail' lawyer.id %}" class="case-card">
+        <div class="docket-no">FILE NO. {{ lawyer.id|stringformat:"05d" }}-2026</div>
+        <div class="case-card-top">
+            <div>
+                <h3>{{ lawyer.user.get_full_name|default:lawyer.user.username }}</h3>
+                <div class="city">@{{ lawyer.user.username }} &middot; {{ lawyer.city }}</div>
+                {% if lawyer.average_rating %}
+                    <div style="color: var(--brass); font-size: 0.82rem; margin-top: 4px;">★ {{ lawyer.average_rating }} ({{ lawyer.rating_count }})</div>
+                {% endif %}
+            </div>
+            {% if lawyer.photo %}
+                <img src="{{ lawyer.photo.url }}" alt="" style="width: 46px; height: 46px; border-radius: 50%; object-fit: cover; border: 2px solid var(--brass); flex-shrink: 0;">
+            {% else %}
+                <div class="seal-badge">{% if lawyer.is_verified %}✓{% else %}{{ lawyer.years_experience }}y{% endif %}</div>
+            {% endif %}
+        </div>
+        <div class="tags">
+            {% for area in lawyer.practice_area_list %}
+                <span class="tag">{{ area }}</span>
+            {% endfor %}
+        </div>
+        <div class="case-card-footer">
+            <div class="rate">₹{{ lawyer.consultation_rate }} <span>/ consultation</span></div>
+            <span style="font-size: 0.82rem; color: var(--seal); font-weight: 600;">View File →</span>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <p>No advocates match your filters yet.</p>
+</div>
+{% endif %}
+
+<div class="stat-cards">
+    <div class="stat-card">
+        <div class="num">{{ total_count }}</div>
+        <div class="label">Advocates on the Roll</div>
+    </div>
+    <div class="stat-card">
+        <div class="num">{{ total_bookings }}</div>
+        <div class="label">Consultations Booked</div>
+    </div>
+    <div class="stat-card">
+        <div class="num">{{ completed_count }}</div>
+        <div class="label">Consultations Completed</div>
+    </div>
+</div>
+{% endblock %}

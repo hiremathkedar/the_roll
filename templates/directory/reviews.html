@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block title %}Experiences — The Roll{% endblock %}
+
+{% block content %}
+<section class="hero" style="padding-top: 20px;">
+    <h1>Shared Experiences</h1>
+    <p>Anonymous accounts from people who've worked with counsel through The Roll. No names, just experiences.</p>
+</section>
+
+<div class="form-block">
+    <h1 style="font-size: 1.2rem;">Share Your Experience</h1>
+    <form method="post">
+        {% csrf_token %}
+        {% for field in form %}
+            <div class="form-row">
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.errors %}<ul class="errorlist">{{ field.errors }}</ul>{% endif %}
+            </div>
+        {% endfor %}
+        <button type="submit" class="btn btn-primary">Post Anonymously</button>
+    </form>
+</div>
+
+{% if reviews %}
+    {% for review in reviews %}
+    <div class="review-card">
+        <div class="review-meta">
+            Anonymous — {{ review.created_at|date:"d M Y" }}
+            {% if review.lawyer %} — re: {{ review.lawyer.user.get_full_name|default:review.lawyer.user.username }}{% endif %}
+            {% if review.rating %}
+                &nbsp;·&nbsp;
+                {% for i in "12345" %}{% if forloop.counter <= review.rating %}★{% else %}☆{% endif %}{% endfor %}
+            {% endif %}
+        </div>
+        <p style="margin: 0;">{{ review.text }}</p>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="empty-state"><p>No experiences shared yet. Be the first.</p></div>
+{% endif %}
+{% endblock %}
