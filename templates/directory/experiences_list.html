@@ -32,14 +32,16 @@
 
 {% if experiences %}
     {% for exp in experiences %}
-    <a href="{% url 'experience_detail' exp.id %}" class="review-card" style="display: block; margin-bottom: 14px;">
-        <div class="review-meta"><a href="{% url 'public_profile' exp.author.username %}" style="color: inherit; font-weight: 600;">{{ exp.author.get_full_name|default:exp.author.username }} (@{{ exp.author.username }})</a> — {{ exp.created_at|date:"d M Y" }}</div>
+    <div class="review-card" style="cursor: pointer; margin-bottom: 14px;" onclick="window.location.href='{% url 'experience_detail' exp.id %}'">
+        <div class="review-meta">
+            <a href="{% url 'public_profile' exp.author.username %}" onclick="event.stopPropagation();" style="color: inherit; font-weight: 600;">{{ exp.author.get_full_name|default:exp.author.username }} (@{{ exp.author.username }})</a> — {{ exp.created_at|date:"d M Y" }}
+        </div>
         <h3 style="font-family: var(--font-display); margin: 0 0 6px; color: var(--ink); font-size: 1.15rem;">{{ exp.title }}</h3>
         <p style="margin: 0 0 10px; color: var(--slate);">{{ exp.body|truncatewords:35 }}</p>
         <div style="font-size: 0.8rem; color: var(--slate-light);">
             ♡ {{ exp.num_likes }} like{{ exp.num_likes|pluralize }} &nbsp;·&nbsp; 💬 {{ exp.num_comments }} comment{{ exp.num_comments|pluralize }}
         </div>
-    </a>
+    </div>
     {% endfor %}
 {% else %}
     <div class="empty-state"><p>No experiences match your search yet.</p></div>
