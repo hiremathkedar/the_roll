@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}Messages — Booking #{{ booking.id }} — The Roll{% endblock %}
+
+{% block content %}
+<div class="docket-no" style="margin-bottom: 14px;">BOOKING #{{ booking.id }} — CORRESPONDENCE</div>
+
+<div class="section-block">
+    <h2>
+        Conversation with {{ other_party.get_full_name|default:other_party.username }} (@{{ other_party.username }})
+    </h2>
+
+    <div class="chat-thread">
+        {% for msg in thread %}
+            <div class="chat-bubble {% if msg.sender == request.user %}mine{% else %}theirs{% endif %}">
+                <div class="meta">{{ msg.sender.get_full_name|default:msg.sender.username }} — {{ msg.created_at|date:"d M, g:i A" }}</div>
+                <div>{{ msg.text }}</div>
+            </div>
+        {% empty %}
+            <p style="color: var(--slate);">No messages yet. Say hello.</p>
+        {% endfor %}
+    </div>
+
+    <form method="post" class="chat-input-row">
+        {% csrf_token %}
+        <textarea name="text" rows="2" placeholder="Type a message..." required></textarea>
+        <button type="submit" class="btn btn-primary">Send</button>
+    </form>
+</div>
+{% endblock %}

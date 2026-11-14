@@ -19,7 +19,7 @@ PRACTICE_AREAS = [
 ]
 
 MODE_CHOICES = [
-    ('call', 'Call'),
+    ('call', 'Video Call'),
     ('text', 'Text'),
     ('in_person', 'In Person'),
 ]
@@ -30,7 +30,6 @@ BOOKING_STATUS = [
     ('expired', 'Expired'),
     ('confirmed', 'Confirmed'),
     ('completed', 'Completed'),
-    ('fined', 'Fined'),
     ('cancelled', 'Cancelled'),
 ]
 
@@ -39,8 +38,6 @@ TRANSACTION_TYPES = [
     ('payout', 'Lawyer Payout'),
     ('platform_fee', 'Platform Fee'),
     ('refund', 'Refund to Client'),
-    ('fine_bonus', 'Fine Bonus to Client'),
-    ('fine_penalty', 'Fine Penalty on Lawyer'),
     ('topup', 'Wallet Top-Up'),
 ]
 
@@ -97,11 +94,56 @@ class Booking(models.Model):
     status = models.CharField(max_length=20, choices=BOOKING_STATUS, default='pending')
     amount_paid = models.DecimalField(max_digits=10, decimal_places=2)
     response_deadline = models.DateTimeField(default=default_response_deadline)
+    availability_slot = models.ForeignKey('AvailabilitySlot', on_delete=models.SET_NULL, null=True, blank=True, related_name='bookings')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def is_expired(self):
         return self.status == 'pending' and timezone.now() > self.response_deadline
+
+    def can_message(self):
+        return self.status in ['confirmed', 'completed']
+
+    def consultation_datetime(self):
+        if self.availability_slot_id:
+            return self.availability_slot.proposed_datetime
+        selected_slot = self.time_slots.filter(is_selected=True).first()
+        return selected_slot.proposed_datetime if selected_slot else None
+
+    def consultation_end_datetime(self):
+        starts_at = self.consultation_datetime()
+        return starts_at + timedelta(hours=1) if starts_at else None
+
+    def can_cancel(self):
+        if self.status in ['pending', 'slots_offered']:
+            return True
+        starts_at = self.consultation_datetime()
+        cancellation_deadline = starts_at - timedelta(hours=10) if starts_at else None
+        return (
+            self.status == 'confirmed'
+            and cancellation_deadline is not None
+            and timezone.now() < cancellation_deadline
+        )
+
+    def can_complete(self):
+        ends_at = self.consultation_end_datetime()
+        return (
+            self.status == 'confirmed'
+            and ends_at is not None
+            and timezone.now() >= ends_at
+            and not Complaint.objects.filter(booking_id=self.pk).exists()
+        )
+
+    def can_report_no_show(self):
+        starts_at = self.consultation_datetime()
+        ends_at = starts_at + timedelta(hours=1) if starts_at else None
+        return (
+            self.status == 'confirmed'
+            and starts_at is not None
+            and ends_at is not None
+            and starts_at <= timezone.now() < ends_at
+            and not Complaint.objects.filter(booking_id=self.pk).exists()
+        )
 
     def __str__(self):
         return f"Booking #{self.id}: {self.client} -> {self.lawyer} [{self.status}]"
@@ -117,6 +159,24 @@ class TimeSlot(models.Model):
         return f"{self.proposed_datetime} ({self.mode}) for Booking #{self.booking_id}"
 
 
+class AvailabilitySlot(models.Model):
+    """A lawyer's published consultation time, which can be booked once."""
+    lawyer = models.ForeignKey(Lawyer, on_delete=models.CASCADE, related_name='availability_slots')
+    proposed_datetime = models.DateTimeField()
+    mode = models.CharField(max_length=20, choices=MODE_CHOICES)
+    is_available = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['proposed_datetime']
+        constraints = [
+            models.UniqueConstraint(fields=['lawyer', 'proposed_datetime'], name='unique_lawyer_availability_time'),
+        ]
+
+    def __str__(self):
+        return f"{self.lawyer}: {self.proposed_datetime} ({self.mode})"
+
+
 class WalletTransaction(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='wallet_transactions')
     booking = models.ForeignKey(Booking, on_delete=models.SET_NULL, null=True, blank=True, related_name='transactions')
@@ -128,12 +188,27 @@ class WalletTransaction(models.Model):
         return f"{self.transaction_type}: {self.amount} -> {self.user}"
 
 
+class Message(models.Model):
+    """Direct message between the client and lawyer of a specific booking.
+    Only usable once the booking is confirmed (or completed)."""
+    booking = models.ForeignKey(Booking, on_delete=models.CASCADE, related_name='messages')
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_messages')
+    text = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"Message on Booking #{self.booking_id} from {self.sender}"
+
+
 class Review(models.Model):
-    """A rating/review of a specific lawyer. Shown ONLY on that lawyer's profile, visible to everyone.
-    Displayed anonymously, but tied to an author internally for moderation/spam control."""
+    """A rating/review of a specific lawyer. Shown ONLY on that lawyer's profile, visible to everyone."""
+    booking = models.OneToOneField('Booking', on_delete=models.SET_NULL, null=True, blank=True, related_name='review')
     lawyer = models.ForeignKey(Lawyer, on_delete=models.CASCADE, related_name='reviews')
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='lawyer_reviews')
-    text = models.TextField()
+    text = models.TextField(blank=True)
     rating = models.PositiveSmallIntegerField(choices=RATING_CHOICES)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -141,9 +216,37 @@ class Review(models.Model):
         return f"Review of {self.lawyer} - {self.rating}star"
 
 
+class Complaint(models.Model):
+    TYPE_CHOICES = [
+        ('other', 'Other complaint'),
+        ('no_show', 'Lawyer did not attend'),
+    ]
+    STATUS_CHOICES = [
+        ('open', 'Open'),
+        ('reviewing', 'Under Review'),
+        ('resolved', 'Resolved'),
+    ]
+    RESOLUTION_CHOICES = [
+        ('refund_client', 'Client refunded'),
+        ('payment_released', 'Payment released to lawyer'),
+        ('other', 'Other resolution'),
+    ]
+
+    booking = models.OneToOneField(Booking, on_delete=models.CASCADE, related_name='complaint')
+    complaint_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='other')
+    text = models.TextField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open')
+    resolution = models.CharField(max_length=20, choices=RESOLUTION_CHOICES, blank=True)
+    admin_notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Complaint for Booking #{self.booking_id} ({self.get_status_display()})"
+
+
 class Experience(models.Model):
-    """A general, Reddit-style real-life experience post. Not tied to any lawyer.
-    Displayed anonymously; author kept internally for permissions/like tracking."""
+    """A general, Reddit-style real-life experience post. Not tied to any lawyer."""
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='experiences')
     title = models.CharField(max_length=200)
     body = models.TextField()

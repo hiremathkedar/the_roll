@@ -16,11 +16,15 @@
         <span class="status-badge status-{{ booking.status }}">{{ booking.get_status_display }}</span>
     </div>
     <p style="color: var(--slate); font-size: 0.88rem; margin: 0 0 12px;">
-        Amount: ₹{{ booking.amount_paid }} &nbsp;·&nbsp; Requested {{ booking.created_at|date:"d M Y, H:i" }}
+        Amount: ₹{{ booking.amount_paid }} &nbsp;·&nbsp; Requested {{ booking.created_at|date:"d M Y, g:i A" }}
     </p>
 
     {% if booking.status == 'pending' %}
-        <p class="helptext">Waiting for counsel to respond by {{ booking.response_deadline|date:"d M Y, H:i" }}. If they don't respond in time, you'll be refunded automatically.</p>
+        <p class="helptext">Waiting for counsel to respond by {{ booking.response_deadline|date:"d M Y, g:i A" }}. If they don't respond in time, you'll be refunded automatically.</p>
+        <form method="post" action="{% url 'cancel_booking' booking.id %}" onsubmit="return confirm('Cancel this booking and get a full refund?');" style="margin-top: 8px;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline" style="border-color: var(--seal); color: var(--seal);">Cancel & Refund</button>
+        </form>
 
     {% elif booking.status == 'slots_offered' %}
         <p class="helptext" style="margin-bottom: 10px;">Choose a time:</p>
@@ -28,28 +32,100 @@
         <form method="post" action="{% url 'confirm_slot' slot.id %}" style="display: inline-block; margin: 0 8px 8px 0;">
             {% csrf_token %}
             <button type="submit" class="btn btn-outline" style="border-color: var(--ink); color: var(--ink);">
-                {{ slot.proposed_datetime|date:"d M Y, H:i" }} — {{ slot.get_mode_display }}
+                {{ slot.proposed_datetime|date:"d M Y, g:i A" }} — {{ slot.get_mode_display }}
             </button>
         </form>
         {% endfor %}
+        <form method="post" action="{% url 'cancel_booking' booking.id %}" onsubmit="return confirm('Cancel this booking and get a full refund?');" style="margin-top: 8px;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline" style="border-color: var(--seal); color: var(--seal);">Cancel & Refund Instead</button>
+        </form>
 
     {% elif booking.status == 'confirmed' %}
+        {% if booking.availability_slot %}
+        <p><strong>Confirmed:</strong> {{ booking.availability_slot.proposed_datetime|date:"d M Y, g:i A" }} — {{ booking.availability_slot.get_mode_display }}</p>
+        {% else %}
         {% with slot=booking.time_slots.all|dictsortreversed:"is_selected"|first %}
-        <p><strong>Confirmed:</strong> {{ slot.proposed_datetime|date:"d M Y, H:i" }} — {{ slot.get_mode_display }}</p>
+        <p><strong>Confirmed:</strong> {{ slot.proposed_datetime|date:"d M Y, g:i A" }} — {{ slot.get_mode_display }}</p>
         {% endwith %}
-        <form method="post" action="{% url 'complete_booking' booking.id %}">
+        {% endif %}
+        <a href="{% url 'booking_messages' booking.id %}" class="btn btn-outline" style="border-color: var(--ink); color: var(--ink); display: inline-block; margin-right: 8px;">💬 Message Counsel</a>
+        {% if booking.complaint %}
+            <p class="helptext">Your no-show complaint is {{ booking.complaint.get_status_display|lower }}. Payment is on hold while admins contact you and the lawyer.</p>
+        {% else %}
+            {% if booking.can_report_no_show %}
+                <p class="helptext">If the lawyer did not attend during this booked hour, report it now. The option is available only while the consultation is scheduled to be in progress.</p>
+                <form method="post" action="{% url 'submit_complaint' booking.id %}" class="feedback-form">
+                    {% csrf_token %}
+                    <label for="no-show-{{ booking.id }}">Report lawyer did not attend</label>
+                    <textarea id="no-show-{{ booking.id }}" name="text" rows="3" required placeholder="Tell us what happened. An admin will contact both you and the lawyer."></textarea>
+                    <button type="submit" class="btn btn-outline complaint-button">Report no-show</button>
+                </form>
+            {% endif %}
+            {% if booking.can_complete %}
+                <p class="helptext">If the consultation happened, mark it complete to release payment.</p>
+                <form method="post" action="{% url 'complete_booking' booking.id %}" style="display: inline-block; margin: 0 8px 12px 0;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-primary">Mark Consultation Complete</button>
+                </form>
+            {% elif not booking.can_report_no_show %}
+                <p class="helptext">Completion is available after the one-hour consultation ends.</p>
+            {% endif %}
+        {% endif %}
+        {% if booking.can_cancel %}
+        <form method="post" action="{% url 'cancel_booking' booking.id %}" onsubmit="return confirm('Cancel this booking and get a full refund?');" style="display: inline-block;">
             {% csrf_token %}
-            <button type="submit" class="btn btn-primary">Mark Consultation Complete</button>
+            <button type="submit" class="btn btn-outline" style="border-color: var(--seal); color: var(--seal);">Cancel & Refund</button>
         </form>
+        {% else %}
+            <p class="helptext">Cancellation and refund are unavailable within 10 hours of the consultation.</p>
+        {% endif %}
 
     {% elif booking.status == 'completed' %}
         <p style="color: var(--success);">Payment released to counsel. Thanks for using The Roll.</p>
+        <div class="post-consultation-feedback">
+            <h3>Rate your consultation</h3>
+            {% if booking.review %}
+                <p><strong>Your rating:</strong> {{ booking.review.rating }}/5</p>
+                {% if booking.review.text %}<p>{{ booking.review.text }}</p>{% endif %}
+            {% else %}
+                <form method="post" action="{% url 'submit_review' booking.id %}" class="feedback-form">
+                    {% csrf_token %}
+                    <label for="rating-{{ booking.id }}">Rating</label>
+                    <select id="rating-{{ booking.id }}" name="rating" required>
+                        <option value="">Choose a rating</option>
+                        <option value="5">5 - Excellent</option>
+                        <option value="4">4 - Good</option>
+                        <option value="3">3 - Okay</option>
+                        <option value="2">2 - Poor</option>
+                        <option value="1">1 - Very poor</option>
+                    </select>
+                    <label for="review-{{ booking.id }}">Written review (optional)</label>
+                    <textarea id="review-{{ booking.id }}" name="text" rows="3" placeholder="Share anything you'd like others to know."></textarea>
+                    <button type="submit" class="btn btn-primary">Submit rating</button>
+                </form>
+            {% endif %}
+
+            <h3>Make a complaint</h3>
+            {% if booking.complaint %}
+                <p class="helptext">Your complaint was submitted on {{ booking.complaint.created_at|date:"d M Y" }}. Status: {{ booking.complaint.get_status_display }}{% if booking.complaint.resolution %}. Resolution: {{ booking.complaint.get_resolution_display }}{% endif %}.</p>
+            {% else %}
+                <form method="post" action="{% url 'submit_complaint' booking.id %}" class="feedback-form">
+                    {% csrf_token %}
+                    <label for="complaint-{{ booking.id }}">Tell us what happened</label>
+                    <textarea id="complaint-{{ booking.id }}" name="text" rows="4" required placeholder="Describe your concern. This will be sent privately to the site administrators."></textarea>
+                    <button type="submit" class="btn btn-outline complaint-button">Submit complaint</button>
+                </form>
+            {% endif %}
+        </div>
+        <a href="{% url 'booking_messages' booking.id %}" class="btn btn-outline" style="border-color: var(--ink); color: var(--ink);">💬 Message Counsel</a>
 
     {% elif booking.status == 'expired' %}
         <p style="color: var(--seal-dark);">Counsel didn't respond in time — you were refunded ₹{{ booking.amount_paid }}.</p>
 
-    {% elif booking.status == 'fined' %}
-        <p style="color: var(--seal-dark);">This counsel was fined for this booking. A bonus refund was credited to your wallet.</p>
+    {% elif booking.status == 'cancelled' %}
+        <p style="color: var(--seal-dark);">This booking was cancelled — ₹{{ booking.amount_paid }} was refunded to your wallet.</p>
+
     {% endif %}
 </div>
 {% empty %}

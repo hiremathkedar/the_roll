@@ -1,5 +1,8 @@
+from decimal import Decimal
+
 from django.contrib import admin
-from .models import Lawyer, Client, Booking, TimeSlot, WalletTransaction, Review
+from django.db import transaction
+from .models import Lawyer, Client, Booking, TimeSlot, WalletTransaction, Review, Complaint
 
 
 class TimeSlotInline(admin.TabularInline):
@@ -32,42 +35,6 @@ class BookingAdmin(admin.ModelAdmin):
     list_display = ('id', 'client', 'lawyer', 'status', 'amount_paid', 'response_deadline', 'created_at')
     list_filter = ('status',)
     inlines = [TimeSlotInline, WalletTransactionInline]
-    actions = ['mark_as_fined']
-
-    @admin.action(description="Mark selected bookings as FINED (10%% clawback: 5%% to client, 5%% to platform)")
-    def mark_as_fined(self, request, queryset):
-        from decimal import Decimal
-        fined_count = 0
-        for booking in queryset:
-            if booking.status == 'fined':
-                continue
-            fine_amount = booking.amount_paid * Decimal('0.10')
-            client_bonus = booking.amount_paid * Decimal('0.05')
-            platform_cut = booking.amount_paid * Decimal('0.05')
-
-            lawyer = booking.lawyer
-            client = booking.client
-
-            lawyer.wallet_balance -= fine_amount
-            lawyer.save()
-
-            client.wallet_balance += client_bonus
-            client.save()
-
-            WalletTransaction.objects.create(
-                user=lawyer.user, booking=booking, amount=-fine_amount,
-                transaction_type='fine_penalty'
-            )
-            WalletTransaction.objects.create(
-                user=client.user, booking=booking, amount=client_bonus,
-                transaction_type='fine_bonus'
-            )
-
-            booking.status = 'fined'
-            booking.save()
-            fined_count += 1
-
-        self.message_user(request, f"{fined_count} booking(s) marked as fined.")
 
 
 @admin.register(TimeSlot)
@@ -85,6 +52,90 @@ class WalletTransactionAdmin(admin.ModelAdmin):
 
 @admin.register(Review)
 class ReviewAdmin(admin.ModelAdmin):
-    list_display = ('id', 'lawyer', 'created_at')
+    list_display = ('id', 'lawyer', 'author', 'rating', 'booking', 'created_at')
     list_filter = ('lawyer',)
     search_fields = ('text',)
+
+
+@admin.register(Complaint)
+class ComplaintAdmin(admin.ModelAdmin):
+    list_display = ('id', 'booking', 'complaint_type', 'status', 'resolution', 'created_at', 'updated_at')
+    list_filter = ('complaint_type', 'status', 'resolution', 'created_at')
+    search_fields = ('text', 'booking__client__user__username', 'booking__lawyer__user__username')
+    readonly_fields = (
+        'booking', 'booking_client_contact', 'booking_lawyer_contact',
+        'complaint_type', 'text', 'created_at', 'updated_at',
+    )
+    actions = ('confirm_no_show_and_refund', 'dismiss_no_show_and_release_payment')
+
+    @admin.display(description='Client contact')
+    def booking_client_contact(self, complaint):
+        user = complaint.booking.client.user
+        return f"{user.get_full_name() or user.username} <{user.email}>"
+
+    @admin.display(description='Lawyer contact')
+    def booking_lawyer_contact(self, complaint):
+        user = complaint.booking.lawyer.user
+        return f"{user.get_full_name() or user.username} <{user.email}>"
+
+    @admin.action(description="Confirm lawyer no-show after contacting both parties; refund client")
+    def confirm_no_show_and_refund(self, request, queryset):
+        self._resolve_no_show_reports(request, queryset, refund_client=True)
+
+    @admin.action(description="Dismiss no-show report after contacting both parties; release lawyer payment")
+    def dismiss_no_show_and_release_payment(self, request, queryset):
+        self._resolve_no_show_reports(request, queryset, refund_client=False)
+
+    def _resolve_no_show_reports(self, request, queryset, *, refund_client):
+        resolved = 0
+        skipped = 0
+        for selected in queryset:
+            with transaction.atomic():
+                complaint = Complaint.objects.select_for_update().get(pk=selected.pk)
+                booking = Booking.objects.select_for_update().select_related(
+                    'client__user', 'lawyer__user'
+                ).get(pk=complaint.booking_id)
+                if (complaint.complaint_type != 'no_show'
+                        or complaint.status not in ('open', 'reviewing')
+                        or booking.status != 'confirmed'
+                        or not complaint.admin_notes.strip()):
+                    skipped += 1
+                    continue
+
+                if refund_client:
+                    client = booking.client
+                    client.wallet_balance += booking.amount_paid
+                    client.save(update_fields=('wallet_balance',))
+                    WalletTransaction.objects.create(
+                        user=client.user,
+                        booking=booking,
+                        amount=booking.amount_paid,
+                        transaction_type='refund',
+                    )
+                    booking.status = 'cancelled'
+                    complaint.resolution = 'refund_client'
+                else:
+                    payout = booking.amount_paid * Decimal('0.90')
+                    platform_fee = booking.amount_paid * Decimal('0.10')
+                    lawyer = booking.lawyer
+                    lawyer.wallet_balance += payout
+                    lawyer.save(update_fields=('wallet_balance',))
+                    WalletTransaction.objects.create(
+                        user=lawyer.user, booking=booking, amount=payout, transaction_type='payout'
+                    )
+                    WalletTransaction.objects.create(
+                        user=lawyer.user, booking=booking, amount=-platform_fee, transaction_type='platform_fee'
+                    )
+                    booking.status = 'completed'
+                    complaint.resolution = 'payment_released'
+
+                booking.save(update_fields=('status', 'updated_at'))
+                complaint.status = 'resolved'
+                complaint.save(update_fields=('status', 'resolution', 'updated_at'))
+                resolved += 1
+
+        self.message_user(
+            request,
+            f"Resolved {resolved} no-show complaint(s); skipped {skipped}. "
+            "Record contact with both parties in admin notes before deciding.",
+        )

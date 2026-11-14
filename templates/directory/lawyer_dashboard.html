@@ -1,10 +1,53 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}My Dashboard — The Roll{% endblock %}
 
 {% block content %}
 <section style="margin-bottom: 24px;">
     <h1 style="font-family: var(--font-display); font-size: 1.8rem; margin: 0 0 6px;">My Dashboard</h1>
     <p style="color: var(--slate);">Wallet balance: <strong>₹{{ lawyer.wallet_balance }}</strong></p>
+</section>
+
+<section class="section-block">
+    <h2>Your availability</h2><p class="helptext">Default hours are 10:00 AM to 6:00 PM daily, in one-hour slots. Add extra hours below.</p>
+    <form method="post" action="{% url 'manage_availability' %}" style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px;">
+        {% csrf_token %}
+        <input type="datetime-local" name="proposed_datetime" step="3600" required style="padding: 8px; border: 1px solid var(--line); border-radius: 3px;">
+        <select name="mode" required style="padding: 8px; border: 1px solid var(--line); border-radius: 3px;">
+            <option value="call">Video Call</option>
+            <option value="text">Text</option>
+            <option value="in_person">In Person</option>
+        </select>
+        <button type="submit" class="btn btn-primary">Add Extra One-Hour Slot</button>
+    </form>
+    <div class="availability-calendar">
+        <div class="calendar-heading">
+            <button type="button" id="calendar-prev" class="calendar-nav" aria-label="Previous month">&lt;</button>
+            <strong id="calendar-month"></strong>
+            <button type="button" id="calendar-next" class="calendar-nav" aria-label="Next month">&gt;</button>
+        </div>
+        <div class="calendar-grid calendar-weekdays" style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;text-align:center;"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
+        <div class="calendar-grid" id="calendar-days" style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;text-align:center;"></div>
+    </div>
+    <p id="selected-date-label" class="calendar-selected-label">Select a date to view your slots.</p>
+    {% for slot in availability_slots %}
+        <div class="calendar-time" data-calendar-date="{{ slot.proposed_datetime|date:'Y-m-d' }}" hidden>
+            <div class="lawyer-slot-summary">
+                <strong>{{ slot.proposed_datetime|date:"g:i A" }}</strong>
+                <span>{{ slot.get_mode_display }} - 1 hour</span>
+                {% if slot.is_booked %}<strong>Booked</strong>{% elif not slot.is_available %}<strong>Removed</strong>{% endif %}
+            </div>
+            {% if slot.is_available %}
+                <form method="post" action="{% url 'manage_availability' %}" onsubmit="return confirm('Delete this available time from your profile?');" style="display:block; margin-top:8px;">
+                    {% csrf_token %}<input type="hidden" name="action" value="delete"><input type="hidden" name="slot_id" value="{{ slot.id }}">
+                    <button type="submit" class="btn slot-remove-button" style="display:inline-block; padding:9px 16px; border:1px solid #8b2e2e; border-radius:4px; background:#8b2e2e; color:#fff; font-weight:700;">Delete slot</button>
+                </form>
+            {% endif %}
+        </div>
+    {% empty %}
+        <p class="helptext">No upcoming slots are available.</p>
+    {% endfor %}
+    <script src="{% static 'js/lawyer-calendar.js' %}?v=1" defer></script>
 </section>
 
 {% for booking in bookings %}
@@ -16,20 +59,19 @@
         <span class="status-badge status-{{ booking.status }}">{{ booking.get_status_display }}</span>
     </div>
     <p style="color: var(--slate); font-size: 0.88rem; margin: 0 0 12px;">
-        Amount in escrow: ₹{{ booking.amount_paid }} &nbsp;·&nbsp; Requested {{ booking.created_at|date:"d M Y, H:i" }}
+        Amount in escrow: ₹{{ booking.amount_paid }} &nbsp;·&nbsp; Requested {{ booking.created_at|date:"d M Y, g:i A" }}
     </p>
 
     {% if booking.status == 'pending' %}
-        <p class="helptext" style="margin-bottom: 12px;">Respond by {{ booking.response_deadline|date:"d M Y, H:i" }} — offer up to 3 time slots within the next week.</p>
-        <form method="post">
+        <p class="helptext" style="margin-bottom: 12px;">Respond by {{ booking.response_deadline|date:"d M Y, g:i A" }} — offer up to 3 time slots within the next week.</p>
+        <form method="post" style="margin-bottom: 14px;">
             {% csrf_token %}
             <input type="hidden" name="booking_id" value="{{ booking.id }}">
             {% for i in "123" %}
             <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center;">
-                <input type="datetime-local" name="slot{{ i }}_datetime" style="padding: 8px; border: 1px solid var(--line); border-radius: 3px;">
+                <input type="datetime-local" name="slot{{ i }}_datetime" step="3600" style="padding: 8px; border: 1px solid var(--line); border-radius: 3px;">
                 <select name="slot{{ i }}_mode" style="padding: 8px; border: 1px solid var(--line); border-radius: 3px;">
-                    <option value="">Mode</option>
-                    <option value="call">Call</option>
+                    <option value="call">Video Call</option>
                     <option value="text">Text</option>
                     <option value="in_person">In Person</option>
                 </select>
@@ -37,17 +79,34 @@
             {% endfor %}
             <button type="submit" class="btn btn-primary">Send Slots to Client</button>
         </form>
+        <form method="post" action="{% url 'decline_booking' booking.id %}" onsubmit="return confirm('Decline this request? The client will be refunded in full.');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline" style="border-color: var(--seal); color: var(--seal);">Decline Request</button>
+        </form>
+
     {% elif booking.status == 'slots_offered' %}
         <p class="helptext">Waiting on client to pick a slot from:</p>
         <ul>
             {% for slot in booking.time_slots.all %}
-            <li>{{ slot.proposed_datetime|date:"d M Y, H:i" }} — {{ slot.get_mode_display }}</li>
+            <li>{{ slot.proposed_datetime|date:"d M Y, g:i A" }} — {{ slot.get_mode_display }}</li>
             {% endfor %}
         </ul>
+
     {% elif booking.status == 'confirmed' %}
+        {% if booking.availability_slot %}
+        <p><strong>Confirmed:</strong> {{ booking.availability_slot.proposed_datetime|date:"d M Y, g:i A" }} — {{ booking.availability_slot.get_mode_display }}</p>
+        {% else %}
         {% with slot=booking.time_slots.all|dictsortreversed:"is_selected"|first %}
-        <p><strong>Confirmed:</strong> {{ slot.proposed_datetime|date:"d M Y, H:i" }} — {{ slot.get_mode_display }}</p>
+        <p><strong>Confirmed:</strong> {{ slot.proposed_datetime|date:"d M Y, g:i A" }} — {{ slot.get_mode_display }}</p>
         {% endwith %}
+        {% endif %}
+        <a href="{% url 'booking_messages' booking.id %}" class="btn btn-outline" style="border-color: var(--ink); color: var(--ink);">💬 Message Client</a>
+
+    {% elif booking.status == 'completed' %}
+        <a href="{% url 'booking_messages' booking.id %}" class="btn btn-outline" style="border-color: var(--ink); color: var(--ink);">💬 Message Client</a>
+
+    {% elif booking.status == 'cancelled' %}
+        <p style="color: var(--seal-dark);">This booking was cancelled and the client was refunded.</p>
     {% endif %}
 </div>
 {% empty %}

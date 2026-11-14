@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}{{ lawyer.user.get_full_name|default:lawyer.user.username }} — The Roll{% endblock %}
 
 {% block content %}
@@ -33,13 +34,13 @@
         <div style="color: var(--slate); font-size: 0.8rem; margin-bottom: 14px;">per consultation</div>
         {% if user.is_authenticated %}
             {% if user.client_profile %}
-                <a href="{% url 'confirm_selection' lawyer.id %}" class="btn btn-primary">Select This Counsel</a>
+                <span class="helptext">Choose an available time below to book.</span>
                 <div style="font-size: 0.72rem; color: var(--slate-light); margin-top: 6px;">Wallet: ₹{{ user.client_profile.wallet_balance }}</div>
             {% else %}
-                <span class="helptext">Only client accounts can select counsel.</span>
+                <span class="helptext">Only client accounts can book a consultation.</span>
             {% endif %}
         {% else %}
-            <a href="{% url 'login' %}?next={{ request.path }}" class="btn btn-primary">Log In to Select</a>
+            <a href="{% url 'login' %}?next={{ request.path }}" class="btn btn-primary">Log In to Book</a>
         {% endif %}
     </div>
 </div>
@@ -47,6 +48,50 @@
 <div class="section-block">
     <h2>About</h2>
     <p>{{ lawyer.bio|default:"No bio provided yet." }}</p>
+</div>
+
+<div class="section-block">
+    <h2>Available consultation times</h2>
+    {% if available_slots %}
+        <p class="helptext">Choose a date to see its available consultation times.</p>
+        <div class="availability-calendar">
+            <div class="calendar-heading">
+                <button type="button" id="calendar-prev" class="calendar-nav" aria-label="Previous month">&lt;</button>
+                <strong id="calendar-month"></strong>
+                <button type="button" id="calendar-next" class="calendar-nav" aria-label="Next month">&gt;</button>
+            </div>
+            <div class="calendar-grid calendar-weekdays" style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;text-align:center;"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
+            <div class="calendar-grid" id="calendar-days" style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;text-align:center;"></div>
+        </div>
+        <p id="selected-date-label" class="calendar-selected-label">Select a date to view available times.</p>
+        {% for slot in available_slots %}
+            <div class="calendar-time" data-calendar-date="{{ slot.proposed_datetime|date:'Y-m-d' }}" hidden>
+            {% if user.is_authenticated and user.client_profile %}
+                <form class="booking-slot-form" method="post" action="{% url 'book_availability_slot' slot.id %}" style="display: inline-block; margin: 0 8px 8px 0;">
+                    {% csrf_token %}
+                    <button type="submit" class="consultation-slot-button"><span class="consultation-slot-time">{{ slot.proposed_datetime|date:"g:i A" }}</span><span class="consultation-slot-mode">{{ slot.get_mode_display }} - 1 hour</span></button>
+                </form>
+            {% elif not user.is_authenticated %}
+                <a class="consultation-slot-button" href="{% url 'login' %}?next={{ request.path }}"><span class="consultation-slot-time">{{ slot.proposed_datetime|date:"g:i A" }}</span><span class="consultation-slot-mode">{{ slot.get_mode_display }} - 1 hour - Log in to book</span></a>
+            {% endif %}
+            </div>
+        {% endfor %}
+        <script src="{% static 'js/lawyer-calendar.js' %}?v=1" defer></script>
+        {% if user.is_authenticated and user.client_profile %}
+        <div id="booking-confirm-modal" class="booking-modal" hidden>
+            <div class="booking-modal-card" role="dialog" aria-modal="true" aria-labelledby="booking-confirm-title">
+                <p id="booking-confirm-title">Confirm booking?</p>
+                <p class="booking-cancel-policy">You cannot cancel or get a refund within 10 hours of the consultation.</p>
+                <div class="booking-modal-actions">
+                    <button type="button" id="booking-confirm-ok" class="btn btn-primary">OK</button>
+                    <button type="button" id="booking-confirm-cancel" class="btn btn-outline">Cancel</button>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    {% else %}
+        <p style="color: var(--slate);">No upcoming times are available right now.</p>
+    {% endif %}
 </div>
 
 {% if same_city %}
@@ -59,21 +104,7 @@
 <div class="section-block">
     <h2>Reviews {% if lawyer.average_rating %}— ★ {{ lawyer.average_rating }} average ({{ lawyer.rating_count }} review{{ lawyer.rating_count|pluralize }}){% endif %}</h2>
 
-    {% if user.is_authenticated %}
-        <form method="post" style="margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px dashed var(--line);">
-            {% csrf_token %}
-            {% for field in review_form %}
-                <div class="form-row">
-                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-                    {{ field }}
-                    {% if field.errors %}<ul class="errorlist">{{ field.errors }}</ul>{% endif %}
-                </div>
-            {% endfor %}
-            <button type="submit" class="btn btn-primary">Post Review</button>
-        </form>
-    {% else %}
-        <p class="helptext" style="margin-bottom: 20px;"><a href="{% url 'login' %}?next={{ request.path }}" style="color: var(--seal); font-weight: 600;">Log in</a> to leave a review.</p>
-    {% endif %}
+    <p class="helptext" style="margin-bottom: 20px;">Clients can rate and review after their consultation is complete.</p>
 
     {% for review in lawyer_reviews %}
         <div class="review-card">
@@ -82,7 +113,7 @@
                 &nbsp;·&nbsp;
                 {% for i in "12345" %}{% if forloop.counter <= review.rating %}★{% else %}☆{% endif %}{% endfor %}
             </div>
-            <p style="margin: 0;">{{ review.text }}</p>
+            {% if review.text %}<p style="margin: 0;">{{ review.text }}</p>{% endif %}
         </div>
     {% empty %}
         <p style="color: var(--slate);">No reviews yet — be the first.</p>

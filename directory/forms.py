@@ -2,7 +2,7 @@ from django import forms
 from django.db import transaction
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
-from .models import Lawyer, Client, PRACTICE_AREAS, Review, RATING_CHOICES, Experience, ExperienceComment
+from .models import Lawyer, Client, PRACTICE_AREAS, Review, RATING_CHOICES, Complaint, Experience, ExperienceComment
 
 
 class ClientSignUpForm(UserCreationForm):
@@ -86,7 +86,18 @@ class LawyerReviewForm(forms.ModelForm):
         fields = ['rating', 'text']
         widgets = {
             'rating': forms.Select(choices=RATING_CHOICES),
-            'text': forms.Textarea(attrs={'placeholder': 'Share your experience with this counsel...', 'rows': 3}),
+            'text': forms.Textarea(attrs={'placeholder': 'Write a review (optional)', 'rows': 3}),
+        }
+        labels = {'rating': 'Your rating', 'text': 'Your review (optional)'}
+
+
+class ComplaintForm(forms.ModelForm):
+    class Meta:
+        model = Complaint
+        fields = ['text']
+        labels = {'text': 'What would you like to report?'}
+        widgets = {
+            'text': forms.Textarea(attrs={'placeholder': 'Describe your concern...', 'rows': 4}),
         }
 
 
